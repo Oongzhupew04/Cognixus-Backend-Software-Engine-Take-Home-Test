@@ -1,4 +1,5 @@
 from flask import render_template, request, redirect, url_for, flash
+from flask_dance.contrib.github import github
 from app import app
 from app.models import TodoList
 from app import db
@@ -6,10 +7,10 @@ from app.models import UserAccounts
 
 @app.route('/')
 def main():
-    return redirect(url_for('login'))
+    return redirect(url_for('login_self'))
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
+@app.route('/login/self', methods=['GET', 'POST'])
+def login_self():
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
@@ -21,6 +22,33 @@ def login():
         else:
             flash('Invalid email or password', category = 'error')
     return render_template('login.html')
+
+@app.route('/login/github')
+def github_login():
+    if not github.authorized:
+        return redirect(url_for('github.login'))
+    account_info = github.get('/user')
+    if account_info.ok:
+        account_info_json = account_info.json()
+
+        email_info = github.get('/user/emails')   #Gets email from github
+        if email_info.ok:
+            emails = email_info.json()
+            # Get the primary email (the first one marked as 'primary' and 'verified')
+            email = next((email['email'] for email in emails if email['primary'] and email['verified']), None)
+
+        password = account_info_json.get('login')   #Gets username from github as password
+
+        user = UserAccounts.query.filter_by(email=email, password=password).first()
+        if user and password:           #If user used github before to login, it will redirect to todo_main and display to the same data from that account
+            return redirect(url_for('todo_main', user_id=user.user_id))
+        else:                           #If first time using github to login, it will register email and username as password in database, then redirect to todo_main
+            register = UserAccounts(email=email, password=password)
+            db.session.add(register)
+            db.session.commit()
+            user = UserAccounts.query.filter_by(email=email, password=password).first()
+            return redirect(url_for('todo_main', user_id=user.user_id))
+    return f"Failed to fetch user info from GitHub: {account_info.text}"
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
