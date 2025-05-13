@@ -3,7 +3,7 @@ import subprocess
 import time
 import requests
 
-NGROK_AUTHTOKEN = "2x014ZpW1aAm1enxcLunUlHeLoy_6SY5Pe73o5keLWFDSbAVg"  # Use environment variable for security
+NGROK_AUTHTOKEN = ""  # Use environment variable for security
 NGROK_PORT = 5000  # The port your Flask app is running on
 
 def start_ngrok():
