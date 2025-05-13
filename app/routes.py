@@ -1,5 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash
+from flask_dance.contrib.google import google
 from flask_dance.contrib.github import github
+from flask_dance.contrib.facebook import facebook
 from app import app
 from app.models import TodoList
 from app import db
@@ -22,6 +24,52 @@ def login_self():
         else:
             flash('Invalid email or password', category = 'error')
     return render_template('login.html')
+
+@app.route('/login/google')
+def google_login():
+    if not google.authorized:
+        return redirect(url_for('google.login'))
+    account_info = google.get("https://people.googleapis.com/v1/people/me?personFields=names,emailAddresses")
+    if account_info.ok:
+        account_info_json = account_info.json()
+
+        email = account_info_json.get("emailAddresses", [{}])[0].get("value", "N/A")
+
+        password = account_info_json.get("names", [{}])[0].get("displayName", "N/A")   #Gets full name from google as password
+
+        user = UserAccounts.query.filter_by(email=email, password=password).first()
+        if user and password:           #If user used google before to login, it will redirect to todo_main and display to the same data from that account
+            return redirect(url_for('todo_main', user_id=user.user_id))
+        else:                           #If first time using google to login, it will register email and username as password in database, then redirect to todo_main
+            register = UserAccounts(email=email, password=password)
+            db.session.add(register)
+            db.session.commit()
+            user = UserAccounts.query.filter_by(email=email, password=password).first()
+            return redirect(url_for('todo_main', user_id=user.user_id))
+    return f"Failed to fetch user info from Google: {account_info.text}"
+
+@app.route('/login/facebook')
+def facebook_login():
+    if not facebook.authorized:
+        return redirect(url_for('facebook.login'))
+    account_info = facebook.get('/me?fields=id,name,email')
+    if account_info.ok:
+        account_info_json = account_info.json()
+
+        email = account_info_json.get("email", "N/A")
+
+        password = account_info_json.get("name", "N/A")   #Gets full name from facebook as password
+
+        user = UserAccounts.query.filter_by(email=email, password=password).first()
+        if user and password:           #If user used facebook before to login, it will redirect to todo_main and display to the same data from that account
+            return redirect(url_for('todo_main', user_id=user.user_id))
+        else:                           #If first time using facebook to login, it will register email and username as password in database, then redirect to todo_main
+            register = UserAccounts(email=email, password=password)
+            db.session.add(register)
+            db.session.commit()
+            user = UserAccounts.query.filter_by(email=email, password=password).first()
+            return redirect(url_for('todo_main', user_id=user.user_id))
+    return f"Failed to fetch user info from Facebook: {account_info.text}"
 
 @app.route('/login/github')
 def github_login():
